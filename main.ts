@@ -1,47 +1,54 @@
-// Cutest picture entry: a tiny cream kitten peeking out of a pastel teacup.
-// This program copies the picture bundled beside it to the output folder,
-// byte for byte, after checking it is a real JPEG or PNG and fits the
-// competition's size limit.
+// Two baby penguins hugging cheek to cheek.
+//
+// This program ships the picture as entry.png next to it and copies that
+// file into the output directory unchanged. The picture is a JPEG, so the
+// output keeps the name entry.png either way, as the competition requires.
 
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const MAX_BYTES = 1048576;
-const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-const JPEG_MAGIC = Buffer.from([0xff, 0xd8, 0xff]);
 
-const here = dirname(fileURLToPath(import.meta.url));
-const source = join(here, "entry.png");
-const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? "/output";
-const target = join(outDir, "entry.png");
+const folder = dirname(fileURLToPath(import.meta.url));
+const sourcePath = join(folder, "entry.png");
+const outputDir = process.env.MAKEFUN_OUTPUT_DIR ?? "/output";
+const outputPath = join(outputDir, "entry.png");
 
-const picture = readFileSync(source);
+const picture = readFileSync(sourcePath);
 
-const isPng = picture.subarray(0, PNG_MAGIC.length).equals(PNG_MAGIC);
-const isJpeg = picture.subarray(0, JPEG_MAGIC.length).equals(JPEG_MAGIC);
+const isPng =
+  picture[0] === 0x89 &&
+  picture[1] === 0x50 &&
+  picture[2] === 0x4e &&
+  picture[3] === 0x47;
+const isJpeg =
+  picture[0] === 0xff && picture[1] === 0xd8 && picture[2] === 0xff;
 if (!isPng && !isJpeg) {
-  console.error("entry.png is not a PNG or JPEG image");
+  console.error("entry.png is neither a PNG nor a JPEG image");
   process.exit(1);
 }
 
 if (picture.length > MAX_BYTES) {
-  console.error(`entry.png is ${picture.length} bytes, over the 1048576 byte limit`);
+  console.error(`entry.png is ${picture.length} bytes, over the 1 MiB limit`);
   process.exit(1);
 }
 
 try {
-  mkdirSync(outDir, { recursive: true });
-} catch (error) {
-  console.error(`could not create output directory ${outDir}: ${error instanceof Error ? error.message : String(error)}`);
-  process.exit(1);
+  mkdirSync(outputDir, { recursive: true });
+} catch (err) {
+  if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
 }
-writeFileSync(target, picture);
+writeFileSync(outputPath, picture);
 
-const written = readFileSync(target);
+const written = readFileSync(outputPath);
 if (!written.equals(picture)) {
-  console.error("output does not match the source image");
+  console.error("readback failed: the output differs from entry.png");
+  process.exit(1);
+}
+if (written.length > MAX_BYTES) {
+  console.error("the output is over the 1 MiB limit");
   process.exit(1);
 }
 
-console.log(`wrote ${target} (${written.length} bytes)`);
+console.log(`wrote ${outputPath} (${written.length} bytes)`);
